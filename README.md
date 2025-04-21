@@ -56,7 +56,7 @@ See `nwsrfs-hydro-models/py-rfchydromodels/run_example.py` for example code demo
 
 Please cite the following work when using this tool:
 
-Walters, G., Bracken, C., et al., "A comprehensive calibration framework for the Northwest River Forecast Center." Unpublished manuscript, Submitted 2025, JAWRA Journal of the American Water Resources Association
+Walters, G., Bracken, C., et al., "A comprehensive calibration framework for the Northwest River Forecast Center." Unpublished manuscript, Submitted 2025, [Preprint](https://eartharxiv.org/repository/view/8993/)
 
 If adapting this code, please credit this repository as the original source. 
 
