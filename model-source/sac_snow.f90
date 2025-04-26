@@ -237,7 +237,7 @@ subroutine sacsnow(n_hrus, dt, sim_length, year, month, day, hour, &
     ! if b > 1 & c > 1 curve is concave up
     ! if b < 1 & c > 1 OR b > 1 & c < 1 curve is s-shaped
     ! "A value of As = 0.05 is used for a W/Ai = 0.0 ratio so that small amounts of snow
-    ! don’t continue to exist well past the time when all the snow is gone in nature."
+    ! don't continue to exist well past the time when all the snow is gone in nature."
     ! - snow 17 manual
     ! adc = adc_a(nh)*adc_y**adc_b(nh)+(1.-adc_a(nh))*adc_y**adc_c(nh)
     ! do i=1,11
