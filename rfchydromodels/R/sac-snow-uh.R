@@ -76,6 +76,32 @@ sac_snow_uh_lagk <- function(dt_hours, forcing, uptribs, pars) {
   total_flow_cfs
 }
 
+sac_only_uh_lagk <- function(dt_hours, forcing, uptribs, pars) {
+  tci <- sac_only(dt_hours, forcing, pars)
+#  tci_inst <- forcing[[1]][, c("year", "month", "day", "hour")]
+#  tci_inst <- cbind(tci_inst, sac_tci_mm = tci)
+#  write.csv(tci_inst, file = file.path("sac_tci_mm.csv"), row.names = FALSE)
+
+  flow_cms <- sync_uh(dt_hours, tci, pars, TRUE, FALSE )
+#  uh_flow_inst <- forcing[[1]][, c("year", "month", "day", "hour")]
+#  uh_flow_inst <- cbind(uh_flow_inst, uh_flow_cms = flow_cms)
+#  write.csv(uh_flow_inst, file = file.path("uh_flow_cms.csv"), row.names = FALSE)
+
+  lagk_flow_cfs <- lagk_tbl(dt_hours, uptribs, pars)
+  lagk_flow_cms <- lagk_flow_cfs * 0.028316847 #CFS to CMS
+
+  #insert 0 at the beginning becasue the lagk flow is one step shorter
+  #then the sac and uh flow.
+  #lagk_flow_cms <- append(lagk_flow_cms, 0, after = 0)
+#  sim_inst <- forcing[[1]][, c("year", "month", "day", "hour")]
+#  sim_inst <- cbind(sim_inst, lagk_flow_cms = lagk_flow_cms)
+#  write.csv(sim_inst, file = file.path("lagk_flow_cms.csv"), row.names = FALSE)
+
+  #total_flow_cms <- chanloss(flow_cms + lagk_flow_cms, forcing, dt_hours, pars)
+  total_flow_cms <- flow_cms + lagk_flow_cms
+  total_flow_cms
+}
+
 #' Execute SAC-SMA, SNOW17, return total channel inflow per zone, and model states
 #'
 #' @param dt_hours timestep in hours
@@ -93,6 +119,10 @@ sac_snow_uh_lagk <- function(dt_hours, forcing, uptribs, pars) {
 #' states <- sac_snow_states(dt_hours, forcingSAKW1, parsSAKW1)
 sac_snow_states <- function(dt_hours, forcing, pars) {
   sac_snow(dt_hours, forcing, pars, return_states = TRUE)
+}
+
+sac_only_states <- function(dt_hours, forcing, pars) {
+  sac_only(dt_hours, forcing, pars, return_states = TRUE)
 }
 
 #' Execute SAC-SMA, SNOW17, return total channel inflow per zone, and model states
@@ -241,8 +271,116 @@ sac_snow <- function(dt_hours, forcing, pars, return_states = FALSE) {
   } else {
     return(x$tci)
   }
-}
+} 
 
+sac_only <- function(dt_hours, forcing, pars, return_states = FALSE) {
+  pars <- as.data.frame(pars)
+
+  sec_per_day <- 86400
+  dt_seconds <- sec_per_day / (24 / dt_hours)
+
+  n_zones <- length(forcing)
+  sim_length <- nrow(forcing[[1]])
+
+  output_matrix <- matrix(0, nrow = sim_length, ncol = n_zones)
+
+  sac_pars <- rbind(
+    pars[pars$name == "uztwm", ]$value,
+    pars[pars$name == "uzfwm", ]$value,
+    pars[pars$name == "lztwm", ]$value,
+    pars[pars$name == "lzfpm", ]$value,
+    pars[pars$name == "lzfsm", ]$value,
+    pars[pars$name == "adimp", ]$value,
+    pars[pars$name == "uzk", ]$value,
+    pars[pars$name == "lzpk", ]$value,
+    pars[pars$name == "lzsk", ]$value,
+    pars[pars$name == "zperc", ]$value,
+    pars[pars$name == "rexp", ]$value,
+    pars[pars$name == "pctim", ]$value,
+    pars[pars$name == "pfree", ]$value,
+    pars[pars$name == "riva", ]$value,
+    pars[pars$name == "side", ]$value,
+    pars[pars$name == "rserv", ]$value,
+    pars[pars$name == "efc", ]$value
+  )
+
+  # sacsnow(n_hrus, dt, sim_length, year, month, day, hour, &
+  #           latitude, elev, &
+  #           sac_pars, &
+  #           peadj, pxadj, &
+  #           snow_pars, &
+  #           init_swe, &
+  #           map, ptps, mat, etd, &
+  #           return_states, &
+  #           tci, aet, uztwc, uzfwc, lztwc, lzfsc, lzfpc, adimc, &
+  #           roimp, sdro, ssur, sif, bfs, bfp, &
+  #           swe, aesc, neghs, liqw, raim, psfall, prain)
+
+  #print("call saconly!")
+  #print( sac_pars )
+  #print( forcing[[1]] )
+  #print( sim_length )
+  x <- .Fortran("saconly",
+    n_hrus = as.integer(n_zones),
+    dt = as.integer(dt_seconds),
+    sim_length = sim_length,
+    year = as.integer(forcing[[1]]$year)[1:sim_length],
+    month = as.integer(forcing[[1]]$month)[1:sim_length],
+    day = as.integer(forcing[[1]]$day)[1:sim_length],
+    hour = as.integer(forcing[[1]]$hour)[1:sim_length],
+    # sac parameters
+    sac_pars = sac_pars,
+    # pet and precp adjustments
+    peadj = pars[pars$name == "peadj", ]$value,
+    pxadj = pars[pars$name == "pxadj", ]$value,
+    # forcings
+    map = do.call("cbind", lapply(forcing, "[[", "map_mm")),
+    etd = do.call("cbind", lapply(forcing, "[[", "etd_mm")),
+    # should the states be output
+    return_states = return_states,
+    # output
+    tci = output_matrix,
+    aet = output_matrix,
+    uztwc = output_matrix,
+    uzfwc = output_matrix,
+    lztwc = output_matrix,
+    lzfsc = output_matrix,
+    lzfpc = output_matrix,
+    adimc = output_matrix,
+    roimp = output_matrix,
+    sdro = output_matrix,
+    ssur = output_matrix,
+    sif = output_matrix,
+    bfs = output_matrix,
+    bfp = output_matrix
+  )
+
+  if (return_states) {
+    return_vars <- c(
+      "year", "month", "day", "hour",
+      "map", "mat", "ptps", "etd", "tci", "aet",
+      "uztwc", "uzfwc", "lztwc", "lzfsc", "lzfpc", "adimc",
+      "roimp", "sdro", "ssur", "sif", "bfs", "bfp"
+    )
+
+    # if pet exists in the input forcings, output it as is
+    if (!is.null(forcing[[1]]$pet_mm)) {
+      x[["pet"]] <- do.call("cbind", lapply(forcing, "[[", "pet_mm"))
+      return_vars <- c(return_vars, "pet")
+    }
+
+    return(format_states(x[return_vars]))
+  } else {
+    return(x$tci)
+  }
+} 
+ 
+sac_only_uh <- function(dt_hours, forcing, pars) {
+  tci <- sac_only(dt_hours, forcing, pars)
+  flow_cms <- sync_uh(dt_hours, tci, pars, TRUE, FALSE )
+  #flow_cms <- chanloss(flow_cms, forcing, dt_hours, pars)
+  flow_cms
+}
 
 #' Format state output from sac_snow_states
 #'
@@ -550,6 +688,79 @@ uh <- function(dt_hours, tci, pars, sum_zones = TRUE, start_of_timestep = TRUE, 
   }
 }
 
+sync_uh <- function(dt_hours, tci, pars, sum_zones = TRUE, start_of_timestep = TRUE, backfill = TRUE) {
+  sec_per_day <- 86400
+  dt_seconds <- sec_per_day / (24 / dt_hours)
+  dt_days <- dt_seconds / sec_per_day
+
+  n_zones <- ncol(tci)
+  sim_length <- nrow(tci)
+
+  pars_df <- as.data.frame(pars)
+  uhg <- list( constant_base_flow = pars_df[pars_df$name == "baseflow", "value" ],
+                     uhg_interval = pars_df[pars_df$name == "interval", "value" ],
+                     uhg_duration = pars_df[pars_df$name == "duration", "value" ],
+                     drainage_area = pars_df[pars_df$name == "zone_area", "value" ],
+		     oridnates = pars_df[substr(pars_df$name, 1,8) == "unit_ord", "value"]
+		    )
+
+  uhg[[4]] <- uhg[[4]]* 2.58998811 # 1 square mile = 2.59 square kilometers
+#  setnames( uhg[[5]], "value", "ordinates" )
+#  uhg[[5]][, ordinates := ordinates / 35.3147 ]  # 35.3147 FT3 = 1 M3
+#  uhg[[5]][, ordinates := ordinates / 25.4 ]    # 1 IN = 25.4 MM
+  uhg[[5]] <- uhg[[5]] / 35.3147 # 35.3147 FT3 = 1 M3
+  uhg[[5]] <- uhg[[5]] / 25.4    # 1 IN = 25.4 MM
+
+  m <- length( uhg[[5]] )
+  n <- sim_length + m
+
+  flow_cfs <- if (sum_zones) numeric(sim_length) else tci
+  for (i in 1:n_zones) {
+    routed <- .Fortran("duamel_sync_uh",
+      tci = as.single(tci[,i]),
+      u1 = as.single(uhg[[5]]),
+      as.single(dt_days),
+      as.integer(n),
+      as.integer(m),
+      0L,
+      qr = as.single(numeric(n))
+    )
+
+    # convert to cfs
+#    zone_flow <- routed$qr[1:sim_length] * 1000 * 3.28084**3 / dt_seconds *
+#	    pars$drainage_area
+    zone_flow <- routed$qr[1:sim_length]
+
+      #pars[pars$name == "zone_area", ]$value[i]
+    if (sum_zones) {
+      flow_cfs <- flow_cfs + zone_flow
+    } else {
+      flow_cfs[, i] <- zone_flow
+    }
+  }
+  # if the forcing data used was beginning of time step,
+  # then the instantaneous output occurs at the end of the timestep
+  # so we need to shift the output ahead by one timestep relative
+  # to the focings
+  # !!CONSIDER REMOVING THE FORCING DATA BEGINNNING OF TIMESTEP ADJUSTMENT, SO THIS
+  # STOP CAN REMOVED AS WELL!!
+  if (start_of_timestep) {
+    if (sum_zones) {
+      c(
+        if (backfill) flow_cfs[1] else NA,
+        flow_cfs[1:(sim_length - 1)]
+      )
+    } else {
+      rbind(
+        if (backfill) flow_cfs[1, ] else NA,
+        flow_cfs[1:(sim_length - 1), ]
+      )
+    }
+  } else {
+    flow_cfs
+  }
+}
+
 #' Seasonal chanloss
 #'
 #' @param flow streamflow vector
@@ -726,6 +937,162 @@ lagk <- function(dt_hours, uptribs, pars, sum_routes = TRUE, return_states = FAL
     iinfl_in = pars[pars$name == "init_if", ]$value,
     ioutfl_in = pars[pars$name == "init_of", ]$value,
     istor_in = pars[pars$name == "init_stor", ]$value,
+    qa_in = do.call("cbind", lapply(uptribs, function(x) as.numeric(x[["flow_cfs"]]))),
+    sim_length = as.integer(sim_length),
+    return_states = as.logical(return_states),
+    lagk_out = lagk_out,
+    co_st_out = lagk_out,
+    inflow_st_out = lagk_out,
+    storage_st_out = lagk_out
+  )
+
+  if (isTRUE(return_states)) {
+    return_vars <- c(
+      "lagk_out" = "routed", "co_st_out" = "lag_time",
+      "inflow_st_out" = "k_inflow", "storage_st_out" = "k_storage"
+    )
+
+    df <- upflow[[1]][, c("year", "month", "day", "hour")]
+
+    for (i in 1:n_uptribs) {
+      for (name in names(return_vars)) {
+        df[[paste0(return_vars[name], "_", i)]] <- routed[[name]][, i]
+      }
+    }
+    return(df)
+    # df = as.data.frame(do.call('cbind',routed[return_vars]))
+    # names(df) = paste0(gsub('_out','',return_vars),'_',1:n_uptribs)
+
+    # return(cbind(upflow[[1]][,c('year','month','day','hour')],df))
+  }
+  if (sum_routes & n_uptribs > 1) {
+    return(apply(routed$lagk_out, 1, sum))
+  } else if (n_uptribs > 1) {
+    return(routed$lagk_out)
+  } else {
+    return(as.vector(routed$lagk_out))
+  }
+}
+
+#' Lag-K Routing for any number of upstream points
+#'
+#' @param dt_hours timestep in hours
+#' @param uptribs a matrix where each column contains flow data (in cfs) for an upstream point
+#' @param pars parameters
+#' @param sum_routes add all routed values together or leave separate
+#' @param return_states return the lagk states
+#'
+#' @return vector of routed flows
+#' @export
+#'
+#' @examples NULL
+#' @useDynLib rfchydromodels lagk_
+lagk_tbl <- function(dt_hours, uptribs, pars, sum_routes = TRUE, return_states = FALSE) {
+  sec_per_day <- 86400
+  dt_seconds <- sec_per_day / (24 / dt_hours)
+  dt_days <- dt_seconds / sec_per_day
+
+  #remove the first time step to be constant with CHPS
+  #uptribs <- lapply( uptribs, function(x) x[-1, ] )
+  n_uptribs <- length(uptribs)
+  sim_length <- nrow(uptribs[[1]])
+
+  # lagk(n_hrus, ita, itb, &
+  #      lagtbl_a_in, lagtbl_b_in, lagtbl_c_in, lagtbl_d_in,&
+  #      ktbl_a_in, ktbl_b_in, ktbl_c_in, ktbl_d_in, &
+  #      lagk_lagmax_in, lagk_kmax_in, lagk_qmax_in, &
+  #      lagk_lagmin_in, lagk_kmin_in, lagk_qmin_in, &
+  #      ico_in, iinfl_in, ioutfl_in, istor_in, &
+  #      qa_in, sim_length, &
+  #      return_states, &
+  #      lagk_out, co_st_out, &
+  #      inflow_st_out,storage_st_out)
+
+  lagk_out <- matrix(0, sim_length, n_uptribs)
+
+  ids <- names( uptribs )
+
+  current_inflow <- numeric()
+  current_outflow <- numeric()
+  current_storage <- numeric()
+  lagtbl_n_pairs <- numeric()
+  ktbl_n_pairs <- numeric()
+  #hard-code the rows
+  carryover_pairs <-matrix(-1, nrow=20, ncol=length(ids))
+  lagtbl <-matrix(-1, nrow=22, ncol=length(ids))
+  ktbl <-matrix(-1, nrow=22, ncol=length(ids))
+  count <- 0
+  for ( id in ids ){
+    current_inflow <- c( current_inflow, 
+	pars[pars$name == "init_if" & pars$zone == id, "value"] )
+    current_outflow <- c( current_outflow, 
+	pars[pars$name == "init_of" & pars$zone == id, "value"] )
+    current_storage <- c( current_storage, 
+	pars[pars$name == "init_stor" & pars$zone == id, "value"] )
+    n_co <- pars[pars$name == "init_co_pairs" & pars$zone == id, "value"] 
+    count <- count + 1
+    for( i in seq( 1, n_co, by =1 ) ){
+      carryover_pairs[i*2, count] <-
+	pars[pars$name == paste0("init_co_lag_", i ) & pars$zone == id,
+	     "value"][1]
+      carryover_pairs[i*2-1, count] <-
+	pars[pars$name == paste0("init_co_q_", i ) & pars$zone == id,
+	     "value"][1]
+    }
+    lagtbl_n_pairs <- c( lagtbl_n_pairs, 
+			pars[pars$name == "number_of_lagq_pairs" & pars$zone == id, "value"] )
+    #
+    # if lag table n pairs is zero, there is a single lag value 
+    # see https://www.weather.gov/media/owp/oh/hrl/docs/833lagk.pdf
+    if ( lagtbl_n_pairs == 0 ){
+        lagtbl[ 1, count] <-
+  	  pars[pars$name == "lagq_pairs_lags_1" & pars$zone == id,
+	     "value"][1]
+    } else {
+      for( i in seq( 1, lagtbl_n_pairs[count], by =1 ) ){
+        lagtbl[i*2 - 1, count] <-
+  	  pars[pars$name == paste0("lagq_pairs_lags_", i ) & pars$zone == id,
+	     "value"][1]
+        lagtbl[i*2, count] <-
+	  pars[pars$name == paste0("lagq_pairs_qs_", i ) & pars$zone == id,
+	     "value"][1]
+      }
+    }
+    #
+    # similarly, if K table n pairs is zero, there is a single K value 
+    # see https://www.weather.gov/media/owp/oh/hrl/docs/833lagk.pdf
+    ktbl_n_pairs <- c( ktbl_n_pairs, 
+		      pars[pars$name == "number_of_kq_pairs" & pars$zone == id, "value"] ) 
+    if ( ktbl_n_pairs == 0 ){
+      ktbl[1, count] <-
+  	 pars[pars$name == "kq_pairs_ks_1" & pars$zone == id,
+	     "value"][1]
+    } else {
+      for( i in seq( 1, ktbl_n_pairs[count], by =1 ) ){
+        ktbl[i*2 - 1, count] <-
+  	 pars[pars$name == paste0("kq_pairs_ks_", i ) & pars$zone == id,
+	     "value"][1]
+        ktbl[i*2, count] <-
+	 pars[pars$name == paste0("kq_pairs_qs_", i ) & pars$zone == id,
+	     "value"][1]
+      }
+    }
+  }
+
+  routed <- .Fortran("lagk_tbls",
+    n_hrus = as.integer(n_uptribs),
+    ita = as.integer(dt_hours),
+    itb = as.integer(dt_hours),
+    # meteng = as.character('METR'),
+    lagtbl_in = as.numeric( lagtbl ),
+    lagtbl_size = as.integer( lagtbl_n_pairs ),
+    ktbl_in = as.numeric( ktbl ),
+    ktbl_size = as.integer( ktbl_n_pairs) ,
+    ico_in = as.numeric( carryover_pairs),
+    ico_in_size = as.integer( n_co),
+    iinfl_in = as.numeric( current_inflow ),
+    ioutfl_in = as.numeric( current_outflow ),
+    istor_in = as.numeric( current_storage ),
     qa_in = do.call("cbind", lapply(uptribs, function(x) as.numeric(x[["flow_cfs"]]))),
     sim_length = as.integer(sim_length),
     return_states = as.logical(return_states),
@@ -1250,6 +1617,80 @@ fa_nwrfc <- function(dt_hours, forcing, pars, climo = NULL, dry_run = FALSE,
     }
     return(forcing)
   }
+}
+
+#' Conduct PE adjustments
+#'
+#' @param dt_hours timestep in hours
+#' @param forcing data frame with with columns for forcing inputs
+#' @param pars sac parameters
+#' @param climo climotology matrix
+#' @param dry_run Do a run without any forcing adjustments, only compute pet and etd
+#' @param return_adj return monthly adjustment factors only
+#' @param return_climo return the computed monthly climo
+#' @return Matrix (1 column per zone) of unrouted channel inflow
+#' @export
+#'
+#' @examples
+#' data(forcing)
+#' data(pars)
+#' dt_hours <- 6
+#' forcing_adj <- fa_nwrfc(dt_hours, forcing, pars)
+#' @useDynLib rfchydromodels fa_ts_
+#' @importFrom stats reshape
+apply_pe_adj <- function(dt_hours, forcing, pars,  dry_run = FALSE,
+                     return_adj = FALSE ) {
+
+  if (return_adj ) stop("Can only return adjustments")
+
+  pars_df <- as.data.frame(pars)
+  etd_m <- pars_df[substr(pars_df$name, 1, 3) == "etd", c("name","value") ]
+  setnames(etd_m, "value", "adj")
+  peadj <- pars_df[pars_df$name=="peadj" & pars_df$type=="sac", c("value")]
+
+  sec_per_day <- 86400
+  dt_seconds <- sec_per_day / (24 / dt_hours)
+
+  sim_length <- nrow(forcing)
+
+  #print(forcing)
+  #print( sim_length )
+  output_matrix <- matrix(0, nrow = sim_length)
+
+  #         latitude, area, &
+  #         peadj_m, &
+  #         map_fa_pars, mat_fa_pars, pet_fa_pars, ptps_fa_pars, &
+  #         map_fa_limits_in, mat_fa_limits_in, pet_fa_limits_in, ptps_fa_limits_in, &
+  #         climo, &
+  #         map, ptps, mat, &
+  #         map_fa, mat_fa, ptps_fa, pet_fa, etd)
+
+  # browser()
+
+  n_zones = 1
+
+  #print( as.matrix(pars) )
+
+  x <- .Fortran("apply_peadj",
+    dt = as.integer(dt_seconds),
+    sim_length = as.integer(sim_length),
+    year = as.integer(forcing$year),
+    month = as.integer(forcing$month),
+    day = as.integer(forcing$day),
+    hour = as.integer(forcing$hour),
+    # monthly crop coefficients
+    #peadj_m = as.matrix(pars),
+    #peadj_m = sapply(pars, function(x) x[["adj"]]),
+    peadj_m = etd_m[["adj"]],
+    # forcings
+    #mape = do.call("cbind", lapply(forcing, "[[", "DSBT2 MAPE")),
+    #mape = forcing[, c("DSBT2 MAPE")],
+    mape = forcing[, c("mpe_mm")],
+    etd = output_matrix
+  )
+
+  forcing$etd_mm <- x$etd[, 1]*peadj
+  return(forcing)
 }
 
 #' Conduct NWRFC style forcing adjustments

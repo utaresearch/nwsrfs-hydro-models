@@ -1,0 +1,274 @@
+subroutine lagk_tbls(n_hrus, ita, itb, &
+    lagtbl_in, lagtbl_size, ktbl_in, ktbl_size,&
+    ico_in, ico_in_size, iinfl_in, ioutfl_in, istor_in, &
+    qa_in, sim_length, &
+    return_states, &
+    lagk_out, co_st_out, &
+    inflow_st_out,storage_st_out)
+    
+    ! Adopted from lagk_run.f90. Changed the input for the Atlanta K
+    !  Procedure to using lag and k tables directly.
+
+    ! !There are three subroutines to execute:  pin7, flag7, fka7
+    ! !subroutines should be ran in the order presented
+    ! !
+    ! !pin7:  Formats inputs (via a P and C array) run LagK operations
+    ! !
+    ! !         pin7(p,c,ita,itb,jlag,jk,meteng,lagtbl,ktbl,ico,iinfl,ioutfl,istor)
+    ! !          p:  output from pin7 subroutine.  Contains lag/q, k/q, and 
+    ! !              2*S/(DT/4)+O, O tables.  Also specifies the timestep of
+    ! !              Input output
+    ! !          c:   output from pin7 subroutine. Contains initial, inflow,
+    ! !               utflow, storage, and carryover values
+    ! !         ita:  Data time interval of the inflow time series in HR (integer)
+    ! !         itb:  Data time interval of the outflow time series HR (integer)
+    ! !         jlag: If > 0 - number of pairs of Lag and Q values used to define the
+    ! !               variable Lag vs Q curve.  If = 0 - constant Lag will be used
+    ! !         jk:   If > 0 - number of pairs of K and Q values used to define the
+    ! !               variable K vs Q curve.  If = 0 - constant K will be used
+    ! !         meteng:  Code specifying whether units of q, lag, k parameters and initial
+    ! !                 values are English or metric:  'ENGL' = enter flow in CFS and 
+    ! !                 volume in CFSD,'METR' = enter flow in CMS and volume in CMSD, 
+    ! !                 Default is metric.  Note output:  P and C output is ALWAYS converted
+    ! !                 to metric
+    ! !         lagtbl:  If jlag=0, constant Lag value.  If jlag>0, lag and q pairs, in
+    ! !                   that order, in a single column array.  Must be in ascending order
+    ! !                   of q (example: [6, 0, 4, 10000, 3.5, 20000]).
+    ! !         ktbl:  If jk=0, constant K value.  If jk>0, K and q pairs, in
+    ! !                   that order, in a single column array.  Must be in ascending order
+    ! !                   of q (example: [1, 100, 1, 40000, 3, 100000]).
+    ! !         ico:  Initial carry over 
+    ! !         iinfl:  Initial inflow
+    ! !         ioutfl:  Initial outflow
+    ! !         istor:  Initial storage
+    ! !
+    ! !  !!Notes: 
+    ! !           1) This routine handles all the variables which would be optimized:
+    ! !              lagtbl, ktble, ico, iinfl, ioutfl, istor
+    ! !           2) %EDIT% This wrapper Fortran code uses parameters:  a, b c, d to develop
+    ! !              lagtbl and ktbl.  The equation is lag/k_table_entry=a*(Q-d)**2+b*Q+c
+    ! !              Q is the flow table entry
+    ! !           3) The pin7.f subroutine was edited to start with a empty c/p array
+    ! !              far larger than which should be needed [p(500),c(100)].  For anyone
+    ! !              interestd below is python code I used to chop the unused lines after
+    ! !              executing the subroutine. This is not necessary for flagk, and fka
+    ! !              subroutines to properly run.  I used this document, pg 1-3, as reference:
+    ! !              https://www.weather.gov/media/owp/oh/hrl/docs/833lagk.pdf
+    ! !               k_start=int(p[17])
+    ! !               k_len=int(p[k_start-1])
+    ! !               pina7_len=int(p[k_start+2*k_len])
+    ! !               p_end=k_start+2*(k_len+pina7_len)+1
+    ! !               p=p[:p_end]
+    ! !               c=c[:int(c[0])]
+    ! !
+    ! !flag7:  Controls the Lag Operation
+    ! !             flag7(p,c,qa,qb,CO_ST,[ndt])
+    ! !
+    ! !            qb: downstream streamflow values (single column array) with only
+    ! !                lag applied, time step is assumed to correspond to itb.
+    ! !            p:  output from pin7 subroutine.  Contains lag/q, k/q, and
+    ! !                2*S/(DT/4)+O, O tables.  Also specifies the timestep of
+    ! !                Input output
+    ! !            c:  output from pin7 subroutine. Contains initial, inflow, 
+    ! !                outflow, storage, and carryover values.  !!NOTE!! use a copy of
+    ! !                 the original c array as it get edited during the subroutine
+    ! !            qa: Upstream streamflow values (single column array), time step is
+    ! !                assumed to correspond to ita
+    ! !            ntd:  Optional variable, total number to time steps to process.
+    ! !                  if less than full qa array is desired 
+    ! !           CO_ST:  Lagk state used for a warm start.  This is a timeseries of lag
+    ! !                   time for flow input
+    ! !
+    ! !fka7:    Perform the attenuation (K) computations 
+    ! !             flag7(p,c,qb,qc,STOR_ST,[ndt])
+    ! !
+    ! !            qc: downstream streamflow values (single column array) with both
+    ! !                lag and attenuation applied, time step is assumed to correspond
+    ! !                to itb.  
+    ! !            p:  output from pin7 subroutine.  Contains lag/q, k/q, and
+    ! !                2*S/(DT/4)+O, O tables.  Also specifies the timestep of
+    ! !                Input output
+    ! !            c:  output from pin7 subroutine. Contains initial, inflow,
+    ! !                outflow, storage, and carryover values
+    ! !            qb: downstream streamflow values (single column array) with only
+    ! !                lag applied, time step is assumed to correspond to itb
+    ! !            ntd: Optional variable, total number to time steps to process.
+    ! !                  if less than full qa array is desired 
+    ! !           STOR_ST:  Lagk state used for a warm start.  This is a timeseries of attenuation
+    ! !                   storage
+
+    ! !Wrapper varible:
+    ! !            return_states:  Binary option to return co_st_out, inflow_st_out,storage_st_out.
+    ! !                            1:  Return states, 0: Return only routed flows
+    ! !            n_hrus:  The number of time steps of the simulation (integer)
+
+    ! !            UNITS CONVERSION
+    ! !             1 CFS to 0.0283168 CMS
+    ! !             1 CMS to 35.3147 CFS
+    ! !             1 CFD to 0.0283168 CMD
+
+  implicit none
+
+  ! ! inputs
+  integer, intent(in):: n_hrus, ita, itb, sim_length
+  character(len = 4), parameter:: meteng = 'METR'
+  !character(len = 4), parameter:: meteng = 'ENGL'
+  logical:: return_states
+  double precision, dimension(n_hrus), intent(in):: iinfl_in, ioutfl_in, istor_in
+  double precision, dimension(sim_length, n_hrus), intent(in):: qa_in
+  double precision, dimension(22, n_hrus), intent(in):: lagtbl_in, ktbl_in
+  double precision, dimension(20, n_hrus), intent(in):: ico_in
+  integer, dimension(n_hrus), intent(in):: lagtbl_size, ktbl_size, ico_in_size
+  
+  ! ! local varible
+  real, dimension(n_hrus):: iinfl, ioutfl, istor
+  real, dimension(20, n_hrus):: ico
+  real, dimension(22, n_hrus):: lagtbl, ktbl
+  real, dimension(sim_length, n_hrus):: qa 
+  real, dimension(500,n_hrus):: p
+  real, dimension(100,n_hrus):: c
+  real, dimension(100):: c_cpy
+  real, dimension(sim_length ,n_hrus):: qb, qc
+  real, dimension(sim_length ,n_hrus):: storage_st, co_st
+  integer, dimension(n_hrus):: jlag, jk
+  integer:: nh, i
+  real::  lag_entry, k_entry
+  
+  ! ! output 
+  double precision, dimension(sim_length ,n_hrus), intent(out):: lagk_out
+  double precision, dimension(sim_length ,n_hrus), intent(out):: inflow_st_out, storage_st_out, co_st_out
+
+  ! ! Convert double precision to single precision.
+  !NEED TO COMMENT OUT UNIT CONVERSION BELOW IF USING ENGL
+  !ico=real(ico_in)*0.0283168e0
+  iinfl=real(iinfl_in)*0.0283168e0
+  ioutfl=real(ioutfl_in)*0.0283168e0
+  istor=real(istor_in)*0.0283168e0
+  
+  qa=real(qa_in)*0.0283168e0
+
+  ! write(*,*)'qa_in'
+  ! do i=1,100
+  !   write(*,*)qa_in(i,:)
+  ! end do
+
+  lagk_out = 0
+  lag_entry = 0
+  k_entry = 0
+  p = 0
+  c = 0
+  c_cpy = 0
+  qb = 0
+  qc = 0
+  ! Only initialize these array if states output is selected to be on
+  if(return_states)then
+    storage_st = 0
+    co_st = 0
+  end if
+  
+  ! write(*,*) 'n_hrus',n_hrus
+  ! write(*,*) 'ita',ita
+  ! write(*,*) 'itb',itb
+  ! write(*,*) 'iinfl_in',iinfl_in
+  ! write(*,*) 'ioutfl_in',ioutfl_in
+  ! write(*,*) 'istor_in',istor_in
+  ! write(*,*) 'sim_length',sim_length
+  
+  ! ! Populate Lag and K tables  
+  do nh=1,n_hrus  
+   do i=1,11
+    lagtbl(i*2,nh)=real(lagtbl_in(i*2,nh)*0.0283168e0)
+    lagtbl(i*2-1,nh)=real(lagtbl_in(i*2-1,nh))
+    ktbl(i*2,nh)=real(ktbl_in(i*2,nh)*0.0283168e0)
+    ktbl(i*2-1,nh)=real(ktbl_in(i*2-1,nh))
+   end do
+  end do
+
+  do nh=1,n_hrus  
+   do i=1,ico_in_size(nh)
+     ico(i*2-1, nh) = real( ico_in(i*2-1, nh)*0.0283168e0 )
+     ico(i*2, nh) = real( ico_in(i*2, nh) )
+!     write(*,*) ico_in(i*2-1, nh)
+!     write(*,*) ico(i*2-1, nh)
+   end do
+  end do
+
+!   write(*,*)'lagtbl'
+!   do i=1,lagtbl_size
+!     write(*,*)lagtbl(i*2-1,:)
+!     write(*,*)lagtbl(i*2,:)
+!   end do
+
+!   write(*,*)'ktbl'
+!   do i=1,ktbl_size
+!     write(*,*)ktbl(i*2-1,:)
+!     write(*,*)ktbl(i*2,:)
+!   end do
+!   write(*,*)'ico_size=', ico_in_size
+!   do i=1,ico_in_size(1)
+!     write(*,*)ico(i*2 -1 ,:)
+!     write(*,*)ico(i*2 ,:)
+!   end do
+
+  ! ! Get length of K and Lag Table.  If the lag or k table max value equals its min value,
+  ! ! then pass a table size of 0 specifiying constant lag, otherwise get the true size of the table
+  ! ! (this check is to prevent a bug in flag7.f from occuring:  passing a all zero lag table causes a return ts of zeros)
+  do nh=1,n_hrus  
+    if (MAXVAL(lagtbl(::2,nh))==MINVAL(lagtbl(::2,nh))) then
+      jlag(nh)=0
+    else
+      !jlag(nh)=size(lagtbl,1)/2
+      jlag(nh)=lagtbl_size(nh)
+    end if
+    if (MAXVAL(ktbl(::2,nh))==MINVAL(ktbl(::2,nh))) then
+      jk(nh)=0
+    else
+      !jk(nh)=size(ktbl,1)/2
+      jk(nh)=ktbl_size(nh)
+    end if
+  end do
+  
+  ! ! Loop through each reach and calculate lag 
+  do nh=1,n_hrus
+    
+    call pin7_co(p(:,nh),c(:,nh),int(ita,4),int(itb,4),jlag(nh),jk(nh),meteng,lagtbl(:,nh), &
+       ktbl(:,nh),ico(:,nh),iinfl(nh),ioutfl(nh),istor(nh))
+
+    ! write(*,*)'p'
+    ! do i=1,500
+    !   if(p(i,nh) .ne. 0) write(*,*) p(i,nh)
+    ! end do
+
+    ! write(*,*)'c'
+    ! do i=1,100
+    !   if(c(i,nh) .ne. 0) write(*,*) c(i,nh)
+    ! end do
+    
+    c_cpy=c(:,nh)
+
+    ! write(*,*)'qa'
+    ! do i=1,100
+    !   write(*,*)qa(i,:)
+    ! end do
+
+    call flag7(p(:,nh),c_cpy,qa(:,nh),qb(:,nh),int(sim_length,4), &
+       co_st(:,nh))
+
+    ! write(*,*)'qb'
+    ! do i=1,100
+    !   write(*,*)qb(i,:)
+    ! end do
+    
+    call fka7(p(:,nh),c_cpy,qb(:,nh),qc(:,nh),int(sim_length,4), &
+       storage_st(:,nh))
+    
+  end do
+  
+  lagk_out=dble(qc)*35.3147d0
+  ! populate states arrays, if turned on
+  if(return_states)then
+    inflow_st_out=dble(qb)*35.3147d0
+    storage_st_out=dble(storage_st)*35.3147d0
+    co_st_out=dble(co_st)
+  end if
+end subroutine
