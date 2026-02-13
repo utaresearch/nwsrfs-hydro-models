@@ -701,24 +701,27 @@ sync_uh <- function(dt_hours, tci, pars, sum_zones = TRUE, start_of_timestep = T
                      uhg_interval = pars_df[pars_df$name == "interval", "value" ],
                      uhg_duration = pars_df[pars_df$name == "duration", "value" ],
                      drainage_area = pars_df[pars_df$name == "zone_area", "value" ],
-		     oridnates = pars_df[substr(pars_df$name, 1,8) == "unit_ord", "value"]
+		     oridnates = pars_df[substr(pars_df$name, 1,8) == "unit_ord", c("value","name")]
 		    )
 
   uhg[[4]] <- uhg[[4]]* 2.58998811 # 1 square mile = 2.59 square kilometers
 #  setnames( uhg[[5]], "value", "ordinates" )
 #  uhg[[5]][, ordinates := ordinates / 35.3147 ]  # 35.3147 FT3 = 1 M3
 #  uhg[[5]][, ordinates := ordinates / 25.4 ]    # 1 IN = 25.4 MM
-  uhg[[5]] <- uhg[[5]] / 35.3147 # 35.3147 FT3 = 1 M3
-  uhg[[5]] <- uhg[[5]] / 25.4    # 1 IN = 25.4 MM
+  uhg[[5]]$value <- uhg[[5]]$value / 35.3147 # 35.3147 FT3 = 1 M3
+  uhg[[5]]$value <- uhg[[5]]$value / 25.4    # 1 IN = 25.4 MM
+  #sort the oridinates in the correct order
+  uhg[[5]]$order_numbers <- as.numeric(gsub("[^[:digit:]]", "", uhg[[5]]$name))
+  uhg[[5]] <- uhg[[5]][order(uhg[[5]]$order_numbers),] 
 
-  m <- length( uhg[[5]] )
+  m <- length( uhg[[5]]$value )
   n <- sim_length + m
 
   flow_cfs <- if (sum_zones) numeric(sim_length) else tci
   for (i in 1:n_zones) {
     routed <- .Fortran("duamel_sync_uh",
       tci = as.single(tci[,i]),
-      u1 = as.single(uhg[[5]]),
+      u1 = as.single(uhg[[5]]$value),
       as.single(dt_days),
       as.integer(n),
       as.integer(m),
