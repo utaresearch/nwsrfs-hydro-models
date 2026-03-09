@@ -66,7 +66,7 @@ C
       IF(I.GT.M)B=M
       DO 5 J=A,B
       IOR=I-J+1
-      !if(I.lt.10)write(*,*)QB(I)+U1(J)*Q(IOR)
+!      if(I.lt.30)write(*,*)QB(I)+U1(J)*Q(IOR), Q(IOR)
       QB(I)=QB(I)+U1(J)*Q(IOR)
  5    CONTINUE
  4    CONTINUE

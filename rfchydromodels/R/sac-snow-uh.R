@@ -694,52 +694,53 @@ sync_uh <- function(dt_hours, tci, pars, sum_zones = TRUE, start_of_timestep = T
   dt_days <- dt_seconds / sec_per_day
 
   n_zones <- ncol(tci)
+
   sim_length <- nrow(tci)
 
   pars_df <- as.data.frame(pars)
-  uhg <- list( constant_base_flow = pars_df[pars_df$name == "baseflow", "value" ],
-                     uhg_interval = pars_df[pars_df$name == "interval", "value" ],
-                     uhg_duration = pars_df[pars_df$name == "duration", "value" ],
-                     drainage_area = pars_df[pars_df$name == "zone_area", "value" ],
-		     oridnates = pars_df[substr(pars_df$name, 1,8) == "unit_ord", c("value","name")]
-		    )
-
-  uhg[[4]] <- uhg[[4]]* 2.58998811 # 1 square mile = 2.59 square kilometers
-#  setnames( uhg[[5]], "value", "ordinates" )
-#  uhg[[5]][, ordinates := ordinates / 35.3147 ]  # 35.3147 FT3 = 1 M3
-#  uhg[[5]][, ordinates := ordinates / 25.4 ]    # 1 IN = 25.4 MM
-  uhg[[5]]$value <- uhg[[5]]$value / 35.3147 # 35.3147 FT3 = 1 M3
-  uhg[[5]]$value <- uhg[[5]]$value / 25.4    # 1 IN = 25.4 MM
-  #sort the oridinates in the correct order
-  uhg[[5]]$order_numbers <- as.numeric(gsub("[^[:digit:]]", "", uhg[[5]]$name))
-  uhg[[5]] <- uhg[[5]][order(uhg[[5]]$order_numbers),] 
-
-  m <- length( uhg[[5]]$value )
-  n <- sim_length + m
 
   flow_cfs <- if (sum_zones) numeric(sim_length) else tci
   for (i in 1:n_zones) {
-    routed <- .Fortran("duamel_sync_uh",
-      tci = as.single(tci[,i]),
-      u1 = as.single(uhg[[5]]$value),
-      as.single(dt_days),
-      as.integer(n),
-      as.integer(m),
-      0L,
-      qr = as.single(numeric(n))
-    )
+      uhg <- list( constant_base_flow = pars_df[pars_df$name == "baseflow" & grepl(paste0("-", i, "$"), pars_df$zone), "value" ],
+                     uhg_interval = pars_df[pars_df$name == "interval" & grepl(paste0("-", i, "$"), pars_df$zone), "value" ],
+                     uhg_duration = pars_df[pars_df$name == "duration" & grepl(paste0("-", i, "$"), pars_df$zone), "value" ],
+                     drainage_area = pars_df[pars_df$name == "zone_area" & grepl(paste0("-", i, "$"), pars_df$zone), "value" ],
+		     oridnates = pars_df[substr(pars_df$name, 1,8) == "unit_ord" & grepl(paste0("-", i, "$"), pars_df$zone), c("value","name")]
+		    )
+
+      uhg[[4]] <- uhg[[4]]* 2.58998811 # 1 square mile = 2.59 square kilometers
+      #  uhg[[5]][, ordinates := ordinates / 35.3147 ]  # 35.3147 FT3 = 1 M3
+      #  uhg[[5]][, ordinates := ordinates / 25.4 ]    # 1 IN = 25.4 MM
+      uhg[[5]]$value <- uhg[[5]]$value / 35.3147 # 35.3147 FT3 = 1 M3
+      uhg[[5]]$value <- uhg[[5]]$value / 25.4    # 1 IN = 25.4 MM
+      #sort the oridinates in the correct order
+      uhg[[5]]$order_numbers <- as.numeric(gsub("[^[:digit:]]", "", uhg[[5]]$name))
+      uhg[[5]] <- uhg[[5]][order(uhg[[5]]$order_numbers),] 
+
+      m <- length( uhg[[5]]$value )
+      n <- sim_length + m
+
+      routed <- .Fortran("duamel_sync_uh",
+        tci = as.single(tci[,i]),
+        u1 = as.single(uhg[[5]]$value),
+        as.single(dt_days),
+        as.integer(n),
+        as.integer(m),
+        0L,
+        qr = as.single(numeric(n))
+      )
 
     # convert to cfs
 #    zone_flow <- routed$qr[1:sim_length] * 1000 * 3.28084**3 / dt_seconds *
 #	    pars$drainage_area
-    zone_flow <- routed$qr[1:sim_length]
+      zone_flow <- routed$qr[1:sim_length]
 
       #pars[pars$name == "zone_area", ]$value[i]
-    if (sum_zones) {
-      flow_cfs <- flow_cfs + zone_flow
-    } else {
-      flow_cfs[, i] <- zone_flow
-    }
+      if (sum_zones) {
+        flow_cfs <- flow_cfs + zone_flow
+      } else {
+        flow_cfs[, i] <- zone_flow
+      }
   }
   # if the forcing data used was beginning of time step,
   # then the instantaneous output occurs at the end of the timestep
@@ -1647,52 +1648,46 @@ apply_pe_adj <- function(dt_hours, forcing, pars,  dry_run = FALSE,
   if (return_adj ) stop("Can only return adjustments")
 
   pars_df <- as.data.frame(pars)
-  etd_m <- pars_df[substr(pars_df$name, 1, 3) == "etd", c("name","value") ]
-  setnames(etd_m, "value", "adj")
+
   peadj <- pars_df[pars_df$name=="peadj" & pars_df$type=="sac", c("value")]
+
+  etd_m <- reshape(
+    pars_df[
+      grepl("etd_", pars_df$name) & pars_df$type == "et",
+      c("name", "zone", "value")
+    ],
+    timevar = "zone", idvar = "name", direction = "wide"
+  )[, -1]
 
   sec_per_day <- 86400
   dt_seconds <- sec_per_day / (24 / dt_hours)
 
-  sim_length <- nrow(forcing)
+  n_zones <- length(forcing)
+  sim_length <- nrow(forcing[[1]])
 
-  #print(forcing)
-  #print( sim_length )
-  output_matrix <- matrix(0, nrow = sim_length)
-
-  #         latitude, area, &
-  #         peadj_m, &
-  #         map_fa_pars, mat_fa_pars, pet_fa_pars, ptps_fa_pars, &
-  #         map_fa_limits_in, mat_fa_limits_in, pet_fa_limits_in, ptps_fa_limits_in, &
-  #         climo, &
-  #         map, ptps, mat, &
-  #         map_fa, mat_fa, ptps_fa, pet_fa, etd)
+  output_matrix <- matrix(0, nrow = sim_length, ncol = n_zones)
 
   # browser()
 
-  n_zones = 1
-
-  #print( as.matrix(pars) )
-
   x <- .Fortran("apply_peadj",
+    n_hrus = as.integer(n_zones),
     dt = as.integer(dt_seconds),
     sim_length = as.integer(sim_length),
-    year = as.integer(forcing$year),
-    month = as.integer(forcing$month),
-    day = as.integer(forcing$day),
-    hour = as.integer(forcing$hour),
-    # monthly crop coefficients
-    #peadj_m = as.matrix(pars),
-    #peadj_m = sapply(pars, function(x) x[["adj"]]),
-    peadj_m = etd_m[["adj"]],
+    year = as.integer(forcing[[1]]$year),
+    month = as.integer(forcing[[1]]$month),
+    day = as.integer(forcing[[1]]$day),
+    hour = as.integer(forcing[[1]]$hour),
+    # monthly etd coefficients
+    peadj_m = as.matrix( etd_m),
     # forcings
-    #mape = do.call("cbind", lapply(forcing, "[[", "DSBT2 MAPE")),
-    #mape = forcing[, c("DSBT2 MAPE")],
-    mape = forcing[, c("mpe_mm")],
+    mape = do.call("cbind", lapply(forcing, "[[", "mpe_mm")),
     etd = output_matrix
   )
 
-  forcing$etd_mm <- x$etd[, 1]*peadj
+  for (z in 1:n_zones) {
+      forcing[[z]]$etd_mm <- x$etd[, z]*peadj[[z]]
+  }
+  #forcing$etd_mm <- x$etd[, 1]*peadj
   return(forcing)
 }
 

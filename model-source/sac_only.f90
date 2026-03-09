@@ -94,7 +94,7 @@ subroutine saconly(n_hrus, dt, sim_length, year, month, day, hour, &
                                 riva, side, rserv, efc, peadj, pxadj
 
   ! local variables
-  integer:: nh,i          ! AWW index for looping through areas
+  integer:: nh,i,j          ! AWW index for looping through areas
   integer:: sim_length   ! length of simulation (days)
 
   ! single precision sac-sma and snow variables
@@ -166,11 +166,11 @@ subroutine saconly(n_hrus, dt, sim_length, year, month, day, hour, &
   !   loop through the zones, running the lumped model code for each
 
   do nh=1,n_hrus
-    print*, 'Running area',nh,'out of',n_hrus
+!    print*, 'Running area',nh,'out of',n_hrus
 
     !print run dates
-    write(*,*)'  start:',year(1), month(1), day(1), hour(1)
-    write(*,*)'    end:',year(sim_length), month(sim_length), day(sim_length), hour(sim_length)
+!    write(*,*)'  start:',year(1), month(1), day(1), hour(1)
+!    write(*,*)'    end:',year(sim_length), month(sim_length), day(sim_length), hour(sim_length)
 
     ! set the areal depletion curve based on parameters ax^b+(1-a)x^c
     ! 0 < a < 1; b, c > 0 
