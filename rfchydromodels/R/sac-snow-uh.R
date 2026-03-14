@@ -76,18 +76,28 @@ sac_snow_uh_lagk <- function(dt_hours, forcing, uptribs, pars) {
   total_flow_cfs
 }
 
-sac_only_uh_lagk <- function(dt_hours, forcing, uptribs, pars) {
+sac_only_uh_lagk <- function(dt_hours, forcing, uptribs, pars, is_parameterized_uh, 
+			     is_parameterized_lagk) {
   tci <- sac_only(dt_hours, forcing, pars)
 #  tci_inst <- forcing[[1]][, c("year", "month", "day", "hour")]
 #  tci_inst <- cbind(tci_inst, sac_tci_mm = tci)
 #  write.csv(tci_inst, file = file.path("sac_tci_mm.csv"), row.names = FALSE)
 
-  flow_cms <- sync_uh(dt_hours, tci, pars, TRUE, FALSE )
+  if ( is_parameterized_uh ){
+     flow_cfs <- uh(dt_hours, tci, pars, TRUE, FALSE )
+     flow_cms <- flow_cfs *  0.028316847 #CFS to CMS
+  } else {
+     flow_cms <- sync_uh(dt_hours, tci, pars, TRUE, FALSE )
+  }
 #  uh_flow_inst <- forcing[[1]][, c("year", "month", "day", "hour")]
 #  uh_flow_inst <- cbind(uh_flow_inst, uh_flow_cms = flow_cms)
 #  write.csv(uh_flow_inst, file = file.path("uh_flow_cms.csv"), row.names = FALSE)
 
-  lagk_flow_cfs <- lagk_tbl(dt_hours, uptribs, pars)
+  if ( is_parameterized_lagk ){
+    lagk_flow_cfs <- lagk(dt_hours, uptribs, pars)
+  } else {
+    lagk_flow_cfs <- lagk_tbl(dt_hours, uptribs, pars)
+  }
   lagk_flow_cms <- lagk_flow_cfs * 0.028316847 #CFS to CMS
 
   #insert 0 at the beginning becasue the lagk flow is one step shorter
@@ -375,9 +385,14 @@ sac_only <- function(dt_hours, forcing, pars, return_states = FALSE) {
   }
 } 
  
-sac_only_uh <- function(dt_hours, forcing, pars) {
+sac_only_uh <- function(dt_hours, forcing, pars, is_parameterized_uh) {
   tci <- sac_only(dt_hours, forcing, pars)
-  flow_cms <- sync_uh(dt_hours, tci, pars, TRUE, FALSE )
+  if ( is_parameterized_uh ){
+   flow_cfs <- uh(dt_hours, tci, pars, TRUE, FALSE )
+   flow_cms <- flow_cfs *  0.028316847 #CFS to CMS
+  } else {
+   flow_cms <- sync_uh(dt_hours, tci, pars, TRUE, FALSE )
+  }
   #flow_cms <- chanloss(flow_cms, forcing, dt_hours, pars)
   flow_cms
 }
@@ -699,7 +714,7 @@ sync_uh <- function(dt_hours, tci, pars, sum_zones = TRUE, start_of_timestep = T
 
   pars_df <- as.data.frame(pars)
 
-  flow_cfs <- if (sum_zones) numeric(sim_length) else tci
+  flow_cms <- if (sum_zones) numeric(sim_length) else tci
   for (i in 1:n_zones) {
       uhg <- list( constant_base_flow = pars_df[pars_df$name == "baseflow" & grepl(paste0("-", i, "$"), pars_df$zone), "value" ],
                      uhg_interval = pars_df[pars_df$name == "interval" & grepl(paste0("-", i, "$"), pars_df$zone), "value" ],
@@ -737,9 +752,9 @@ sync_uh <- function(dt_hours, tci, pars, sum_zones = TRUE, start_of_timestep = T
 
       #pars[pars$name == "zone_area", ]$value[i]
       if (sum_zones) {
-        flow_cfs <- flow_cfs + zone_flow
+        flow_cms <- flow_cms + zone_flow
       } else {
-        flow_cfs[, i] <- zone_flow
+        flow_cms[, i] <- zone_flow
       }
   }
   # if the forcing data used was beginning of time step,
@@ -751,17 +766,17 @@ sync_uh <- function(dt_hours, tci, pars, sum_zones = TRUE, start_of_timestep = T
   if (start_of_timestep) {
     if (sum_zones) {
       c(
-        if (backfill) flow_cfs[1] else NA,
-        flow_cfs[1:(sim_length - 1)]
+        if (backfill) flow_cms[1] else NA,
+        flow_cms[1:(sim_length - 1)]
       )
     } else {
       rbind(
-        if (backfill) flow_cfs[1, ] else NA,
-        flow_cfs[1:(sim_length - 1), ]
+        if (backfill) flow_cms[1, ] else NA,
+        flow_cms[1:(sim_length - 1), ]
       )
     }
   } else {
-    flow_cfs
+    flow_cms
   }
 }
 
@@ -1644,7 +1659,6 @@ fa_nwrfc <- function(dt_hours, forcing, pars, climo = NULL, dry_run = FALSE,
 #' @importFrom stats reshape
 apply_pe_adj <- function(dt_hours, forcing, pars,  dry_run = FALSE,
                      return_adj = FALSE ) {
-
   if (return_adj ) stop("Can only return adjustments")
 
   pars_df <- as.data.frame(pars)
@@ -1667,7 +1681,7 @@ apply_pe_adj <- function(dt_hours, forcing, pars,  dry_run = FALSE,
 
   output_matrix <- matrix(0, nrow = sim_length, ncol = n_zones)
 
-  # browser()
+  #browser()
 
   x <- .Fortran("apply_peadj",
     n_hrus = as.integer(n_zones),
