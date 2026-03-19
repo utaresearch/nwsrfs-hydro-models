@@ -233,7 +233,7 @@ subroutine saconly(n_hrus, dt, sim_length, year, month, day, hour, &
         !etd_step = efc(nh)*etd_step+(1d0-efc(nh))*(1d0-dble(aesc_sp))*etd_step
     
         ! write(*,*) "call exsac:", "map_step=", map_step, "etd_step = ", etd_step
-        call exsac(real(dt), map_step, real(etd_step), &
+        call exsac(real(dt), real(map_step), real(etd_step), &
             !SAC PARAMETERS
             !UZTWM,UZFWM,UZK,PCTIM,ADIMP,RIVA,ZPERC, &
             !REXP,LZTWM,LZFSM,LZFPM,LZSK,LZPK,PFREE, &
