@@ -37,11 +37,40 @@ LASTNEXT
 # R junk
 .Rproj.user
 .Rhistory
+.Rapp.history
+
+# Python junk
+nwsrfspy.egg-info
+__pycache__
 
 # Mac junk
 .DS_Store
-py-rfchydromodels/.idea/
 
-# example python csv and other files
-py-rfchydromodels/EXAMPLE-*_Sim.csv
-py-rfchydromodels/utilities/__pycache__/
+# Local notes and scripts
+*.Rcheck/
+*_*.tar.gz
+.*
+!.github/
+!.github/workflows/
+!.github/workflows/*.yml
+*.md
+setup_*.sh
+*_report.md
+*_checklist.md
+
+# R build arifacts
+00*.log
+
+# rendered md should not usually be included, but might in specefic cases using -f 
+*.html
+
+# python package docs
+/nwsrfs_py/docs/build/
+/nwsrfs_py/docs/_build/
+
+# R pkgdown site output
+/nwsrfs_r/docs/
+/nwsrfs_r/docs/_pkgdown.yml
+
+#pypi distribution
+/nwsrfs_py/dist/*

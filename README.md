@@ -1,84 +1,151 @@
-# NWRFC Operational Hydrology Models 
+# NWRFC Operational Hydrology Models
 
 ## Overview
 
-The Northwest River Forecast Center (NWRFC) utilizes the National Weather Service River Forecasting System (NWSRFS) to provide timely information related to flooding, water supply, drought, recreation, navigation, and environmental flows. Originally developed in the late 1970s, NWSRFS remains a core component of the NWS Community Hydrologic Prediction System (CHPS). The system includes a suite of models that simulate soil moisture, snow accumulation and melt, flow routing, channel loss, and consumptive water use. For additional details on each model, see [this link](https://www.weather.gov/owp/oh_hrl_nwsrfs_users_manual_htm_xrfsdocpdf) .
+The Northwest River Forecast Center (NWRFC) uses the National Weather Service River Forecast System (NWSRFS) to support flood forecasting, water supply operations, drought monitoring, recreation, navigation, and environmental flow analyses.
 
-To support hydrologic model calibration and development, NWRFC has created FORTRAN 90 wrappers to execute the original NWSRFS FORTRAN 77 source code. This repository contains the original FORTRAN 77 model code which has been verified to be is functionally equivalent to the Java-based implementation used in CHPS. The wrapped suite of available models includes SAC-SMA, SNOW17, Unit Hydrograph, LAGK, CHANLOSS, and CONS_USE.
+This repository contains:
 
-Also included in this repository are Python and R packages that compile and interact with the FORTRAN 90 wrappers. These tools are intended to facilitate coupling the hydrologic models with modern optimization packages, supporting model calibration and evaluation.
+* Original NWSRFS FORTRAN source code and wrappers used for modern integrations.
+* An R package (`nwsrfsr`).
+* A Python package (`nwsrfs_py`) built with `meson-python` and `f2py`.
 
-**Languages:** R, Python, FORTRAN 77, and FORTRAN 90
+The wrapped model suite includes SAC-SMA, SNOW-17, UNIT-HG, LAG-K, CHANLOSS, and CONS_USE.
 
-**Compiler:** A FORTRAN compiler is required to install this package. This package has been tested with [gfortran](https://gcc.gnu.org/wiki/GFortran). See [this page](https://cran.r-project.org/bin/macosx/tools/) for a simple installation option on macOS
+## Compatibility
 
-**Known OS Compatibility:** macOS and Red Hat OS (will likley work on any modern linux distro). Windows compatibility through WSL. 
+* Languages: R, Python, FORTRAN 77, FORTRAN 90
+* Tested compiler: [gfortran](https://gcc.gnu.org/wiki/GFortran)
+* Tested OS: macOS and Red Hat Linux (Windows via WSL is expected to work)
+* Tested timestep: 6-hour model timestep
 
-**Time Step Compatibility:** This package and its wrappers have been tested only with a 6-hour time step. Use with other time steps may require additional configuration or validation.
+## Development Environment (pixi)
 
-## Installation
-
-### R Package Installation
-
-Install the R package from within R using the following command:
-
-```R
-devtools::install_github('NOAA-NWRFC/nwsrfs-hydro-models',subdir='rfchydromodels')
-```   
-
-or from the command line:
+[pixi](https://pixi.prefix.dev/) manages all dependencies (Python, R, gfortran, meson, etc.) in a single reproducible environment from `pixi.toml`. No separate conda env or system R install needed.
 
 ```bash
 git clone https://github.com/NOAA-NWRFC/nwsrfs-hydro-models.git
 cd nwsrfs-hydro-models
-R CMD INSTALL rfchydromodels
+
+pixi install                  # create environment
+pixi run install-py           # build & install Python package (editable)
+pixi run install-r            # build & install R package
+pixi run test-py              # run Python tests
+pixi run test-r               # run R tests
+pixi run test-all             # run both
+pixi run check-r              # R CMD check (no manual)
+pixi run build-r              # build R source tarball
+pixi run check-r-cran         # CRAN submission check on built tarball
+pixi run build-docs           # build all docs (Python + R + R README)
+pixi run build-docs-py        # build Python Sphinx docs only
+pixi run build-docs-r         # build R pkgdown docs only
+pixi run build-docs-r-readme  # render R README.qmd to HTML
 ```
 
-See the documentation `?rfchydromodels` and `?sac_snow_uh` for examples. 
+To activate the environment in your shell (e.g., for interactive R or Python):
 
-### Python Package Installation
+```bash
+pixi shell
+```
 
-**Tested Python Version:** 3.10.3\
-**Package Dependencies:**  numpy, pandas\
-**Dependencies:** numpy, pandas
-numpy's `f2py` is used to compile the source code and FORTRAN wrappers. To compile the FORTRAN source:
+If you use [direnv](https://direnv.net/), the `.envrc` includes `pixi shell-hook` so the environment activates automatically when you `cd` into the repo.
+
+## Quick Start
+
+### R (nwsrfsr)
+
+From R:
+
+```r
+devtools::install_github("NOAA-NWRFC/nwsrfs-hydro-models", subdir = "nwsrfs_r")
+```
+
+From shell:
 
 ```bash
 git clone https://github.com/NOAA-NWRFC/nwsrfs-hydro-models.git
-cd nwsrfs-hydro-models/py-rfchydromodels/utilities
-make
+cd nwsrfs-hydro-models
+R CMD INSTALL nwsrfs_r
 ```
-See `nwsrfs-hydro-models/py-rfchydromodels/run_example.py` for example code demonstrating how to execute the NWSRFS models.
 
-*Note:  An equivalent Python version of the R package is planned for a future release of this repository.*
+### Python (nwsrfs_py)
+
+Install from PyPI:
+
+```bash
+pip install nwsrfspy
+python -c "import nwsrfs_py; print('Success')"
+```
+
+For repository development, use pixi (recommended):
+
+```bash
+pixi run install-py
+```
+
+Or with conda from source:
+
+```bash
+conda create -n nwsrfs_env python=3.10
+conda activate nwsrfs_env
+conda install -c conda-forge fortran-compiler meson ninja
+
+git clone https://github.com/NOAA-NWRFC/nwsrfs-hydro-models.git
+cd nwsrfs-hydro-models/nwsrfs_py
+pip install .
+python -c "import nwsrfs_py; print('Success')"
+```
+
+Examples: `nwsrfs-hydro-models/nwsrfs_py/examples`
+
+## Package-Specific Docs
+
+* Python package README: `nwsrfs-hydro-models/nwsrfs_py/README.md`
+* R package README: `nwsrfs-hydro-models/nwsrfs_r/README.md`
+
+## HTML Documentation
+
+**Live URLs**: [Main Landing Page](https://NOAA-NWRFC.github.io/nwsrfs-hydro-models/)
+
+_This repository publishes package docs to GitHub Pages with separate paths to avoid Python/R confusion:_
+
+>* Python Sphinx docs: `/python/`
+>* R pkgdown docs: `/r/`
+
+Local preview entry points:
+
+* Python HTML: `nwsrfs_py/docs/build/html/index.html`
+* R HTML: `nwsrfs_r/docs/reference/index.html`
+* Combined landing page: `pages/index.html`
+
+## Related Repositories & Data
+
+* **[nwsrfs-hydro-autocalibration](https://github.com/NOAA-NWRFC/nwsrfs-hydro-autocalibration)** — Automated calibration framework for NWSRFS models using evolving dynamically dimensioned search (EDDS). Uses the R and Python packages from this repository.
+
+* **Sample calibration data**: [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18829935.svg)](https://doi.org/10.5281/zenodo.18829935) — Input data for 5 example basins (FSSO3, SAKW1, SFLN2, WCHW1, WGCM8) archived on Zenodo.
 
 ## Credits and References
 
-Please cite the following work when using this tool:
+Please cite:
 
-Walters, G., Bracken, C., et al., "A comprehensive calibration framework for the Northwest River Forecast Center." Unpublished manuscript, Submitted 2025, [Preprint](https://eartharxiv.org/repository/view/8993/)
+Walters, G., Bracken, C., et al., "A comprehensive calibration framework for the Northwest River Forecast Center." Journal of the American Water Resources Association (JAWRA), accepted for publication in 2026. [Preprint](https://eartharxiv.org/repository/view/8993/)
 
-If adapting this code, please credit this repository as the original source. 
+If adapting this code, please credit this repository as the original source.
 
 ### NWSRFS References
 
-* Burnash, Robert J. C., et al. A generalized streamflow simulation system : conceptual modeling for digital computers. , National Weather Service, 1973
-* Anderson, Eric. Snow Accumulation and Ablation Model. National Oceanic and Atmospheric Administration, 2006
-* Linsley, R.K., et al. Hydrology for Engineers, McGraw-Hill series in water resources and environmental engineering. McGraw-Hill, 1982
-* NOAA. Consumptive Use Operation. National Oceanic and Atmospheric Administration, 2005
+For model background, see the [NWSRFS User Manual](https://www.weather.gov/owp/oh_hrl_nwsrfs_users_manual_htm_xrfsdocpdf)
 
 ## Acknowledgment
 
-Guidance on compiling and running NWSRFS code was informed by work from Andy Wood ([andywood@ucar.edu](mailto:andywood@ucar.edu)) and collaborators. See: [NWS_hydro_models](https://github.com/NCAR/NWS_hydro_models/) GitHub repository
+Guidance on compiling and running NWSRFS code was informed by work from Andy Wood ([andywood@ucar.edu](mailto:andywood@ucar.edu)) and collaborators. See [NWS_hydro_models](https://github.com/NCAR/NWS_hydro_models/).
 
 ## Legal Disclaimer
 
 This is a scientific product and does not represent official communication from NOAA or the U.S. Department of Commerce. All code is provided "as is."
 
 See full disclaimer: [NOAA GitHub Policy](https://github.com/NOAAGov/Information)
- \
- \
- \
+
 <img src="https://www.weather.gov/bundles/templating/images/header/header.png" alt="NWS-NOAA Banner">
 
 [National Oceanographic and Atmospheric Administration](https://www.noaa.gov) | [National Weather Service](https://www.weather.gov/) | [Northwest River Forecast Center](https://www.nwrfc.noaa.gov/rfc/)

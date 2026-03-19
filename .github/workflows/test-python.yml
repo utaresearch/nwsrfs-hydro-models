@@ -1,0 +1,38 @@
+name: Test Python Models
+
+on:
+  push:
+    # Runs on your current branch and will continue to work when merged to main
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    
+    # This matrix replaces the parallel array from GitLab
+    strategy:
+      # If one Python version fails, let the others finish so you can see all results
+      fail-fast: false 
+      matrix:
+        os: ["macos-latest","ubuntu-latest", "windows-latest"]
+        pixi_env: ["py310", "py311", "py312"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up pixi
+        uses: prefix-dev/setup-pixi@v0.8.8
+        with:
+          # Tells the setup action to cache the specific environment for this matrix leg
+          environments: ${{ matrix.pixi_env }}
+
+      - name: Show runtime versions
+        run: |
+          pixi run -e ${{ matrix.pixi_env }} python -c "import sys, numpy, pandas, scipy; print('python:', sys.version); print('numpy:', numpy.__version__); print('pandas:', pandas.__version__); print('scipy:', scipy.__version__)"
+          pixi run -e ${{ matrix.pixi_env }} gfortran --version
+
+      - name: Run Python tests
+        # Uses the specific environment variable injected by the matrix
+        run: pixi run -e ${{ matrix.pixi_env }} test-py

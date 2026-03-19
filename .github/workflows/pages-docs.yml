@@ -1,0 +1,58 @@
+name: Publish Documentation
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up pixi
+        uses: prefix-dev/setup-pixi@v0.8.8
+
+      - name: Build Sphinx docs (Python package)
+        run: pixi run sphinx-build -b html nwsrfs_py/docs/source _site/python
+
+      - name: Build pkgdown site (R package)
+        run: |
+          pixi run build-docs-r
+          mkdir -p _site/r
+          cp -R nwsrfs_r/docs/. _site/r/
+
+      - name: Build top-level README.html
+        run: pixi run pandoc README.md -s -o _site/README.html
+
+      - name: Add site landing page and Pages metadata
+        run: |
+          cp pages/index.html _site/index.html
+          touch _site/.nojekyll
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
