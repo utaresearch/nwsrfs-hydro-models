@@ -1050,7 +1050,7 @@ lagk_tbl <- function(dt_hours, uptribs, pars, sum_routes = TRUE, return_states =
   lagtbl_n_pairs <- numeric()
   ktbl_n_pairs <- numeric()
   #hard-code the rows
-  carryover_pairs <-matrix(-1, nrow=20, ncol=length(ids))
+  carryover_pairs <-matrix(-1, nrow=60, ncol=length(ids))
   lagtbl <-matrix(-1, nrow=22, ncol=length(ids))
   ktbl <-matrix(-1, nrow=22, ncol=length(ids))
   count <- 0
