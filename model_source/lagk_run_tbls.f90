@@ -117,12 +117,12 @@ subroutine lagk_tbls(n_hrus, ita, itb, &
   double precision, dimension(n_hrus), intent(in):: iinfl_in, ioutfl_in, istor_in
   double precision, dimension(sim_length, n_hrus), intent(in):: qa_in
   double precision, dimension(22, n_hrus), intent(in):: lagtbl_in, ktbl_in
-  double precision, dimension(20, n_hrus), intent(in):: ico_in
+  double precision, dimension(60, n_hrus), intent(in):: ico_in
   integer, dimension(n_hrus), intent(in):: lagtbl_size, ktbl_size, ico_in_size
   
   ! ! local varible
   real, dimension(n_hrus):: iinfl, ioutfl, istor
-  real, dimension(20, n_hrus):: ico
+  real, dimension(60, n_hrus):: ico
   real, dimension(22, n_hrus):: lagtbl, ktbl
   real, dimension(sim_length, n_hrus):: qa 
   real, dimension(500,n_hrus):: p
