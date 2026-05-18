@@ -1050,6 +1050,8 @@ lagk_tbl <- function(dt_hours, uptribs, pars, sum_routes = TRUE, return_states =
   lagtbl_n_pairs <- numeric()
   ktbl_n_pairs <- numeric()
   #hard-code the rows
+  #the nrow=60 must be consistent with the array size of
+  # 'ico_in' and 'ico' variables in lagk_run_tbls.f90
   carryover_pairs <-matrix(-1, nrow=60, ncol=length(ids))
   lagtbl <-matrix(-1, nrow=22, ncol=length(ids))
   ktbl <-matrix(-1, nrow=22, ncol=length(ids))
