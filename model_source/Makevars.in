@@ -1,0 +1,42 @@
+# Template for src/Makevars, filled in by the package `configure` script.
+# @FPCONTRACT@ becomes -ffp-contract=off when the Fortran compiler accepts it,
+# otherwise nothing. Compilers may contract a*b+c into a fused multiply-add
+# with a single rounding; whether they do varies by compiler version and CPU
+# (aarch64 fuses, baseline x86-64 cannot), which made simulation results
+# differ across platforms. Disabling contraction makes results agree across
+# macOS, Linux, x86-64 and arm64 to within libm rounding (~1e-6 mm of total
+# channel inflow over a 43 year run). See dev/README.md in the source
+# repository for the full diagnosis.
+PKG_FFLAGS = @FPCONTRACT@
+PKG_FCFLAGS = @FPCONTRACT@
+
+all: $(SHLIB)
+
+# Fortran 90 modules must be compiled before any file that `use`s them. CRAN
+# builds with a parallel make (make -j); without explicit ordering it can
+# a necessary `.mod` file might not be available, generating an error
+# "Cannot open module file '<name>.mod'". Fix by declaring the dependencies
+# explicitly for files which use modules.
+sorting.o: types.o
+stats.o: sorting.o
+utilities.o: stats.o sorting.o
+FA.o: utilities.o
+sac_snow.o: utilities.o
+uh2p_get_scale.o: uh_optim.o
+# zero_brent.f90 is a bare function (no module), linked into the shared object;
+# uh_optim calls it as an external procedure.
+
+# These files use obsolete features and so fail when using the default -std=f95.
+# The explicit rules bypass R's implicit rule and its $(ALL_FFLAGS), so they
+# must carry $(PKG_FFLAGS) themselves or the flags above would silently not
+# apply to these files (exsnow19.f is in the model's hot path).
+fka7.o: fka7.f
+	$(FC) -c -fPIC -O2 $(PKG_FFLAGS) fka7.f
+flag7.o: flag7.f
+	$(FC) -c -fPIC -O2 $(PKG_FFLAGS) flag7.f
+pin7.o: pin7.f
+	$(FC) -c -fPIC -O2 $(PKG_FFLAGS) pin7.f
+ex57.o: ex57.f
+	$(FC) -c -fPIC -O2 $(PKG_FFLAGS) ex57.f
+exsnow19.o: exsnow19.f
+	$(FC) -c -fPIC -O2 $(PKG_FFLAGS) exsnow19.f

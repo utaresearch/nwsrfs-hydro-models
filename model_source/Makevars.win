@@ -1,25 +1,36 @@
-PKG_FFLAGS =
-PKG_FCFLAGS =
+# Windows always builds with Rtools gfortran, which accepts -ffp-contract=off,
+# so the flag is set directly instead of probed by `configure` (which does not
+# run on Windows). See src/Makevars.in for why contraction is disabled.
+PKG_FFLAGS = -ffp-contract=off
+PKG_FCFLAGS = -ffp-contract=off
 
 all: $(SHLIB)
 
-# need to tell R the order to compile dependent modules
-sac_snow_only_tci.o sac_snow_states.o: utilities.o
+# Fortran 90 modules must be compiled before any file that `use`s them. CRAN
+# builds with a parallel make (make -j); without explicit ordering it can
+# a necessary `.mod` file might not be available, generating an error
+# "Cannot open module file '<name>.mod'". Fix by declaring the dependencies
+# explicitly for files which use modules.
+sorting.o: types.o
+stats.o: sorting.o
+utilities.o: stats.o sorting.o
 FA.o: utilities.o
-utilities.o: types.o stats.o sorting.o
-stats.o: types.o sorting.o
+sac_snow.o: utilities.o
 uh2p_get_scale.o: uh_optim.o
+# zero_brent.f90 is a bare function (no module), linked into the shared object;
+# uh_optim calls it as an external procedure.
 
-# These files use obsolete features and so fail when using the default -std=f95
+# These files use obsolete features and so fail when using the default -std=f95.
+# The explicit rules bypass R's implicit rule and its $(ALL_FFLAGS), so they
+# must carry $(PKG_FFLAGS) themselves or the flags above would silently not
+# apply to these files (exsnow19.f is in the model's hot path).
 fka7.o: fka7.f
-	$(FC) -c -O2 fka7.f
+	$(FC) -c -O2 $(PKG_FFLAGS) fka7.f
 flag7.o: flag7.f
-	$(FC) -c -O2 flag7.f
+	$(FC) -c -O2 $(PKG_FFLAGS) flag7.f
 pin7.o: pin7.f
-	$(FC) -c -O2 pin7.f
+	$(FC) -c -O2 $(PKG_FFLAGS) pin7.f
 ex57.o: ex57.f
-	$(FC) -c -O2 ex57.f
-SNDEPTH.o: SNDEPTH.f
-	$(FC) -c -O2 SNDEPTH.f
+	$(FC) -c -O2 $(PKG_FFLAGS) ex57.f
 exsnow19.o: exsnow19.f
-	$(FC) -c -O2 exsnow19.f
+	$(FC) -c -O2 $(PKG_FFLAGS) exsnow19.f

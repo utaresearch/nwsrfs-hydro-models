@@ -10,7 +10,8 @@ uh(
   pars,
   sum_zones = TRUE,
   start_of_timestep = TRUE,
-  backfill = TRUE
+  backfill = TRUE,
+  return_inst = TRUE
 )
 }
 \arguments{
@@ -27,6 +28,11 @@ kept separate and returned as a matrix}
 forcing data that uses beginning of timestep labeling}
 
 \item{backfill}{when start_of_timestep is TRUE, should the first value be duplicated}
+
+\item{return_inst}{should instantaneous flow be returned rather than period average.
+Period average is the mean of a timestep and the one after it, with
+the final value carried forward. Applied before the
+start_of_timestep shift.}
 }
 \value{
 Vector of routed flow in cfs
@@ -35,11 +41,15 @@ Vector of routed flow in cfs
 Two parameter unit hydrograph routing for one or more basin zones
 }
 \examples{
-\dontrun{
+# Simple: full model chain via the bundled example; routed flow per zone
+run <- load_example("NRKW1")
+head(run$sacsnow_sf)
+
+# Low-level: run FA -> SAC-SMA/SNOW17 to get TCI, then route it with UH.
 data(nrkw1_forcing)
 data(nrkw1_pars)
 dt_hours <- 6
-tci <- sac_snow(dt_hours, nrkw1_forcing, nrkw1_pars)
+forcing_adj <- fa_nwrfc(dt_hours, nrkw1_forcing, nrkw1_pars)
+tci <- sac_snow(dt_hours, forcing_adj, nrkw1_pars)
 flow_cfs <- uh(dt_hours, tci, nrkw1_pars)
-}
 }

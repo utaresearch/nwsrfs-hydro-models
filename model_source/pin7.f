@@ -60,7 +60,7 @@ CFC      COMMON/FDBUG/IODBUG,ITRACE,IDBALL,NDEBUG,IDEBUG(20)
       COMMON /FATLGK/ IATL,C1,C2
 C
 CFC      DIMENSION P(LP),C(LC)
-      DIMENSION P(500),C(100)
+      DIMENSION P(1000),C(100)
 CGW   Adding FTPY help
 CGW Cf2py intent(out) P
 CGW Cf2py intent(out) C
@@ -113,6 +113,11 @@ CGW  Static Inputs
       DTB="XXXX"
       TLRC=0
       QBNTL=0
+CCB  IDIMI holds the inflow time series dimension. The call that used to
+CCB  set it (CHEKTS/getDimensionAndUnitInFortran, line ~225) is commented
+CCB  out, leaving it read uninitialised at the IF below (valgrind flag).
+CCB  This wrapper always passes instantaneous flow, so default to 'L3/T'.
+      IDIMI='L3/T'
 
 CGW  Assigned Varibles.....................
 C

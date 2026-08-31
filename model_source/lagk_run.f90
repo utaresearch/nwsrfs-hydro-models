@@ -129,7 +129,7 @@ subroutine lagk(n_hrus, ita, itb, &
   real, dimension(n_hrus):: lagk_kmin, lagk_lagmin, lagk_qmin
   real, dimension(22, n_hrus):: lagtbl, ktbl
   real, allocatable, dimension(:,:):: qa
-  real, dimension(500,n_hrus):: p
+  real, dimension(1000,n_hrus):: p
   real, dimension(100,n_hrus):: c
   real, dimension(100):: c_cpy
   real, allocatable, dimension(:,:):: qb, qc

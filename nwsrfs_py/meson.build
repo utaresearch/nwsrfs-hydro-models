@@ -1,8 +1,22 @@
 project('nwsrfspy', 'c', 'fortran',
-  version : '0.1.0',
+  version : '1.0.3',
   meson_version: '>= 1.1.0',
-  default_options : ['warning_level=1'],
+  default_options : [
+    'warning_level=1',
+    'optimization=2',
+    'b_lto=false'
+  ],
 )
+
+# Disable floating-point expression contraction so model results agree across
+# platforms. Compilers may fuse a*b+c into a fused multiply-add with a single
+# rounding; whether they do varies by compiler version and CPU, and in this
+# iterated single-precision model chain the one-ulp differences are amplified
+# into visibly different simulations. The R package applies the same flag (see
+# its configure script), so both wrappers produce matching results everywhere.
+# get_supported_arguments drops the flag on compilers that reject it.
+fc = meson.get_compiler('fortran')
+add_project_arguments(fc.get_supported_arguments('-ffp-contract=off'), language: 'fortran')
 
 py = import('python').find_installation(pure: false)
 module_name = 'nwsrfs_src'
@@ -23,13 +37,13 @@ incdir_f2py = run_command(py,
 
 fortran_sources = files(
   'src/types.f90', 'src/sorting.f90', 'src/stats.f90', 'src/utilities.f90',
-  'src/uh_optim.f90', 'src/uh2p_get_scale.f90', 'src/FA.f90', 'src/lagk_run.f90',
-  'src/sac_snow.f90', 'src/consuse_run.f90', 'src/chanloss.f90', 'src/rsnwelev_run.f90',
-  'src/initCommonBlocksPin.f', 'src/fintp7.f', 'src/fka7.f', 'src/flag7.f',
-  'src/fop7.f', 'src/fserc7.f', 'src/fslag7.f', 'src/pin7.f', 'src/pina7.f',
-  'src/umemov.f', 'src/umemst.f', 'src/PACK19.f', 'src/exsnow19.f', 'src/aesc19.f',
-  'src/rout19.f', 'src/zero19.f', 'src/duamel.f', 'src/sac1.f', 'src/ex_sac1.f',
-  'src/melt19.f', 'src/ex57.f', 'src/ex42.f', 'src/blockdata_fatlgk.f'
+  'src/zero_brent.f90', 'src/uh_optim.f90', 'src/uh2p_get_scale.f90', 'src/FA.f90',
+  'src/lagk_run.f90', 'src/sac_snow.f90', 'src/consuse_run.f90', 'src/chanloss.f90',
+  'src/rsnwelev_run.f90','src/initCommonBlocksPin.f', 'src/fintp7.f', 'src/fka7.f',
+  'src/flag7.f', 'src/fop7.f', 'src/fserc7.f', 'src/fslag7.f', 'src/pin7.f',
+  'src/pina7.f', 'src/umemov.f', 'src/umemst.f', 'src/PACK19.f', 'src/exsnow19.f',
+  'src/aesc19.f', 'src/rout19.f', 'src/zero19.f', 'src/duamel.f', 'src/sac1.f',
+  'src/ex_sac1.f', 'src/melt19.f', 'src/ex57.f', 'src/ex42.f', 'src/blockdata_fatlgk.f'
 )
 
 generated_f2py_sources = [
@@ -63,10 +77,28 @@ fortranobject_c = incdir_f2py / 'fortranobject.c'
 # -----------------------------------------
 py_dep = py.dependency()
 
-
 ext_link_args = []
+
 if host_machine.system() == 'darwin'
-  ext_link_args += ['-Wl,-undefined,dynamic_lookup']
+  ext_link_args += [
+    '-Wl,-undefined,dynamic_lookup',
+    '-static-libgfortran',
+  ]
+  
+  # Query gfortran for static libquadmath
+  qm_res = run_command(
+    fc.cmd_array(), ['-print-file-name=libquadmath.a'],
+    check : false
+  )
+  qm_path = qm_res.stdout().strip()
+
+  # gfortran returns an absolute path if found, or just 'libquadmath.a' if not found.
+  if qm_path.startswith('/')
+    ext_link_args += [qm_path]
+  else
+    # Fallback for environments (like Conda/Pixi) where static quadmath isn't present
+    ext_link_args += fc.get_supported_link_arguments('-lquadmath')
+  endif
 endif
 
 py.extension_module(
@@ -91,6 +123,12 @@ py.extension_module(
 
 # 1. ALL Python files in one list
 all_package_files = files(
+  
+  # Legal/attribution record
+  'LICENSE',
+  'COPYRIGHTS',
+  'NOTICE',
+
   # Base package files
   'nwsrfs_py/__init__.py',
   'nwsrfs_py/simulation.py',

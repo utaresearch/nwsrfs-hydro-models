@@ -11,7 +11,8 @@ fa_nwrfc(
   climo = NULL,
   dry_run = FALSE,
   return_adj = FALSE,
-  return_climo = FALSE
+  return_climo = FALSE,
+  adjust = TRUE
 )
 }
 \arguments{
@@ -23,11 +24,17 @@ fa_nwrfc(
 
 \item{climo}{climotology matrix}
 
-\item{dry_run}{Do a run without any forcing adjustments, only compute pet and etd}
+\item{dry_run}{Do a run without any forcing adjustments, only compute pet and etd.
+Shorthand for \code{adjust = FALSE}; when TRUE it overrides \code{adjust}.}
 
 \item{return_adj}{return monthly adjustment factors only}
 
 \item{return_climo}{return the computed monthly climo}
+
+\item{adjust}{Which forcings to adjust: TRUE for all of them, FALSE for none,
+or a character vector naming a subset of "map", "mat", "ptps" and "pet".
+Unadjusted forcings still pass through the routine, which computes pet and
+etd, but with neutral adjustment parameters.}
 }
 \value{
 Matrix (1 column per zone) of unrouted channel inflow
@@ -36,10 +43,8 @@ Matrix (1 column per zone) of unrouted channel inflow
 Conduct NWRFC style forcing adjustments
 }
 \examples{
-\donttest{
 data(nrkw1_forcing)
 data(nrkw1_pars)
 dt_hours <- 6
 forcing_adj <- fa_nwrfc(dt_hours, nrkw1_forcing, nrkw1_pars)
-}
 }

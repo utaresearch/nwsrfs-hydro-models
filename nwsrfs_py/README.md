@@ -35,6 +35,15 @@ print(sim_flow.head())
 
 Python docs: [https://NOAA-NWRFC.github.io/nwsrfs-hydro-models/python/](https://NOAA-NWRFC.github.io/nwsrfs-hydro-models/python/)
 
+## Attribution
+
+`nwsrfs_py` packages and wraps legacy NWSRFS FORTRAN components together with newer support modules.
+
+Detailed source provenance, contributor attribution, and third-party license
+notices are documented in [COPYRIGHTS](COPYRIGHTS).
+
+Current package maintainers are Geoffrey Walters and Cameron Bracken.
+
 ## Build From Source (Developers)
 
 Source builds require a Fortran toolchain plus build tools.
@@ -83,4 +92,4 @@ For runnable scripts in the source tree, see `examples/`.
 
 If you use this package, please cite:
 
-Walters, G., Bracken, C., et al., "A comprehensive calibration framework for the Northwest River Forecast Center." Journal of the American Water Resources Association (JAWRA), accepted for publication in 2026. [Preprint](https://eartharxiv.org/repository/view/8993/)
+Walters, G., Bracken, C., Gillies, B., et al. 2026. "A Comprehensive Calibration Framework for the Northwest River Forecast Center." *JAWRA Journal of the American Water Resources Association* 62(2): e70112. [https://doi.org/10.1111/1752-1688.70112](https://doi.org/10.1111/1752-1688.70112)
